@@ -11,7 +11,7 @@ const bootstrap = async (): Promise<void> => {
   const branchName = generateBranchName(options.package, options.version);
   const repoPath = await setupRepository(options.repo, branchName);
   
-  await updateDependency(repoPath, options.package, options.version);
+  await updateDependency(repoPath, options.package, options.version, options);
   await createPR(repoPath, options.repo, branchName, options.package, options.version);
 };
 

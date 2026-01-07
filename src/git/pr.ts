@@ -3,9 +3,7 @@ import simpleGit from 'simple-git';
 import { getGitHubToken } from './auth';
 import type { PullRequestResult } from '../types/github';
 
-/**
- * Commits changes, pushes branch and creates a pull request
- */
+// Commits changes, pushes branch and creates a pull request
 export const createPullRequest = async (
   repoPath: string,
   repoFullName: string,

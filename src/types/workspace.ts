@@ -1,5 +1,10 @@
 // Workspace detection and package.json location types
-export type WorkspaceType = 'pnpm' | 'yarn' | 'npm' | 'none';
+export enum WorkspaceType {
+  PNPM = 'pnpm',
+  YARN = 'yarn',
+  NPM = 'npm',
+  NONE = 'none'
+}
 
 export type WorkspaceConfig ={
   type: WorkspaceType;

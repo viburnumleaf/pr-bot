@@ -7,6 +7,7 @@ export const parseArgs = (): CliOptions => {
   program.requiredOption("-r, --repo <repo>", "GitHub repository (owner/name)")
     .requiredOption("-p, --package <name>", "NPM package name")
     .requiredOption("-v, --version <version>", "Target package version")
+    .option("--path <path>", "Specific path to package.json (for monorepo workspaces)")
     .parse(process.argv);
 
   return program.opts() as CliOptions;
