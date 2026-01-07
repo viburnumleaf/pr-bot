@@ -1,4 +1,11 @@
 import type { PackageUpdateResult, DependencySection, MultiPackageUpdateResult } from '../types/package';
+import { PackageError } from '../errors';
+import { DIFF_CONTEXT } from '../constants';
+
+type PackageJsonStructure = {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+}
 
 // Updates a dependency version in package.json content
 export const updatePackageJsonContent = (
@@ -6,10 +13,13 @@ export const updatePackageJsonContent = (
   packageName: string,
   version: string
 ): { updated: boolean; newContent: string; updatedIn: DependencySection | null } => {
-  const packageJson = JSON.parse(content) as {
-    dependencies?: Record<string, string>;
-    devDependencies?: Record<string, string>;
-  };
+  let packageJson: PackageJsonStructure;
+  
+  try {
+    packageJson = JSON.parse(content) as PackageJsonStructure;
+  } catch (error) {
+    throw new PackageError(`Invalid JSON in package.json: ${error instanceof Error ? error.message : String(error)}`);
+  }
   
   let updatedIn: DependencySection | null = null;
   
@@ -27,12 +37,16 @@ export const updatePackageJsonContent = (
   return { updated: true, newContent, updatedIn };
 };
 
-// Generates a simple diff showing the changed line
+// Generates a simple diff showing the changed line with context
 export const generateDiff = (original: string, updated: string, filePath: string): string => {
   const originalLines = original.split('\n');
   const updatedLines = updated.split('\n');
   
-  const diff: string[] = [`--- ${filePath} (original)`, `+++ ${filePath} (updated)`, ''];
+  const diff: string[] = [
+    `--- ${filePath} (original)`,
+    `+++ ${filePath} (updated)`,
+    '',
+  ];
   
   // Find the first changed line
   const maxLength = Math.max(originalLines.length, updatedLines.length);
@@ -49,9 +63,9 @@ export const generateDiff = (original: string, updated: string, filePath: string
     return diff.join('\n');
   }
   
-  // Show context around the change (2 lines before and after)
-  const start = Math.max(0, changedIndex - 2);
-  const end = Math.min(maxLength, changedIndex + 3);
+  // Show context around the change
+  const start = Math.max(0, changedIndex - DIFF_CONTEXT.LINES_BEFORE);
+  const end = Math.min(maxLength, changedIndex + DIFF_CONTEXT.LINES_AFTER + 1);
   
   for (let i = start; i < end; i++) {
     if (i === changedIndex) {
@@ -96,21 +110,22 @@ export const updateMultiplePackageJson = (
         updated: true,
         diff,
         packageJsonPath: file.path,
-        updatedIn
+        updatedIn,
       });
     }
   }
   
   if (results.length === 0) {
-    throw new Error(
-      `❌ Dependency "${packageName}" not found in any package.json files. ` +
-      `Searched ${packageJsonFiles.length} file(s): ${packageJsonFiles.map(f => f.path).join(', ')}`
+    const searchedFiles = packageJsonFiles.map(f => f.path).join(', ');
+    throw new PackageError(
+      `Dependency "${packageName}" not found in any package.json files. ` +
+      `Searched ${packageJsonFiles.length} file(s): ${searchedFiles}`
     );
   }
   
   return {
     updated: true,
     results,
-    totalUpdated: results.length
+    totalUpdated: results.length,
   };
 };

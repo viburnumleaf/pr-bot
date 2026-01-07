@@ -2,14 +2,14 @@
 export type DependencySection = 'dependencies' | 'devDependencies';
 
 export type PackageUpdateResult = {
-  updated: boolean;
-  diff: string;
-  packageJsonPath: string;
-  updatedIn: DependencySection;
+  readonly updated: boolean;
+  readonly diff: string;
+  readonly packageJsonPath: string;
+  readonly updatedIn: DependencySection;
 }
 
 export type MultiPackageUpdateResult = {
-  updated: boolean;
-  results: PackageUpdateResult[];
-  totalUpdated: number;
+  readonly updated: boolean;
+  readonly results: readonly PackageUpdateResult[];
+  readonly totalUpdated: number;
 }

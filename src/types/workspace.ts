@@ -3,15 +3,15 @@ export enum WorkspaceType {
   PNPM = 'pnpm',
   YARN = 'yarn',
   NPM = 'npm',
-  NONE = 'none'
+  NONE = 'none',
 }
 
-export type WorkspaceConfig ={
-  type: WorkspaceType;
-  workspaces: string[];
+export type WorkspaceConfig = {
+  readonly type: WorkspaceType;
+  readonly workspaces: readonly string[];
 }
 
-export type PackageJsonLocation ={
-  path: string;
-  relativePath: string;
+export type PackageJsonLocation = {
+  readonly path: string;
+  readonly relativePath: string;
 }

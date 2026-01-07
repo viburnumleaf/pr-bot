@@ -1,12 +1,10 @@
-/**
- * GitHub PR related types
- */
-export interface PullRequestResult {
-  prUrl: string;
-  prNumber: number;
+// GitHub PR related types
+export type PullRequestResult = {
+  readonly prUrl: string;
+  readonly prNumber: number;
 }
 
-export interface RepositoryInfo {
-  owner: string;
-  repo: string;
+export type RepositoryInfo = {
+  readonly owner: string;
+  readonly repo: string;
 }

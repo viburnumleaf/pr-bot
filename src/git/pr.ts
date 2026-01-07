@@ -1,61 +1,27 @@
 import { Octokit } from '@octokit/rest';
 import { getGitHubToken } from './auth';
+import { GitHubClient } from '../services/github-client';
 import { generateCommitMessage, generatePRTitle } from '../utils/pr-validation';
+import { RepositoryError } from '../errors';
 import type { PullRequestResult } from '../types/github';
 import type { PackageFileUpdate } from '../package/update';
 
-// Gets file content from GitHub
-const getFileContent = async (
-  octokit: Octokit,
-  owner: string,
-  repo: string,
-  path: string,
-  branch: string
-): Promise<{ content: string; sha: string }> => {
-  try {
-    const { data } = await octokit.rest.repos.getContent({
-      owner,
-      repo,
-      path,
-      ref: branch
-    });
-
-    if (Array.isArray(data) || data.type !== 'file') {
-      throw new Error(`Path ${path} is not a file`);
-    }
-
-    const content = Buffer.from(data.content, 'base64').toString('utf-8');
-    return { content, sha: data.sha };
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('404')) {
-      throw new Error(`File ${path} not found in repository`);
-    }
-    throw error;
+// Parses repository full name into owner and repo
+const parseRepository = (repoFullName: string): { owner: string; repo: string } => {
+  const parts = repoFullName.split('/');
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    throw new RepositoryError(
+      `Invalid repository format: ${repoFullName}. Expected format: owner/repo`
+    );
   }
+  return { owner: parts[0], repo: parts[1] };
 };
 
-// Updates file content on GitHub
-const updateFileContent = async (
-  octokit: Octokit,
-  owner: string,
-  repo: string,
-  path: string,
-  content: string,
-  sha: string,
-  branch: string,
-  message: string
-): Promise<void> => {
-  const encodedContent = Buffer.from(content).toString('base64');
-
-  await octokit.rest.repos.createOrUpdateFileContents({
-    owner,
-    repo,
-    path,
-    message,
-    content: encodedContent,
-    sha,
-    branch
-  });
+// Creates a GitHub client instance
+const createGitHubClient = (): GitHubClient => {
+  const token = getGitHubToken();
+  const octokit = new Octokit({ auth: token });
+  return new GitHubClient(octokit);
 };
 
 // Commits changes and creates a pull request
@@ -67,23 +33,21 @@ export const createPullRequest = async (
   version: string,
   fileUpdates: PackageFileUpdate[]
 ): Promise<PullRequestResult> => {
-  const [owner, repo] = repoFullName.split('/');
-  const token = getGitHubToken();
-  const octokit = new Octokit({ auth: token });
+  const { owner, repo } = parseRepository(repoFullName);
+  const client = createGitHubClient();
 
   // Get file contents and update them
+  const commitMessage = generateCommitMessage(packageName, version);
+  
   for (const fileUpdate of fileUpdates) {
-    const { content: currentContent, sha } = await getFileContent(
-      octokit,
+    const { sha } = await client.getFileContent(
       owner,
       repo,
       fileUpdate.path,
       branchName
     );
 
-    const commitMessage = generateCommitMessage(packageName, version);
-    await updateFileContent(
-      octokit,
+    await client.updateFileContent(
       owner,
       repo,
       fileUpdate.path,
@@ -96,17 +60,15 @@ export const createPullRequest = async (
 
   // Create pull request
   const prTitle = generatePRTitle(packageName, version);
-  const { data: pr } = await octokit.rest.pulls.create({
-    owner,
-    repo,
+  const pr = await client.createPullRequest(owner, repo, {
     title: prTitle,
     head: branchName,
     base: baseBranch,
-    body: `This PR updates \`${packageName}\` to version \`${version}\`.`
+    body: `This PR updates \`${packageName}\` to version \`${version}\`.`,
   });
 
   return {
     prUrl: pr.html_url,
-    prNumber: pr.number
+    prNumber: pr.number,
   };
 };

@@ -1,16 +1,24 @@
 import { z } from 'zod';
+import { ValidationError } from '../errors';
+import { logger } from '../services/logger';
 
-// Helper function to parse and validate with Zod schema
-export const parseOrExit = <T>(schema: z.ZodSchema<T>, data: unknown, errorPrefix: string): T => {
+// Parses and validates data with Zod schema
+export const parseOrExit = <T>(
+  schema: z.ZodSchema<T>,
+  data: unknown,
+  errorPrefix: string
+): T => {
   const result = schema.safeParse(data);
   
   if (!result.success) {
-    console.error(`❌ ${errorPrefix}:`);
-    result.error.issues.forEach((issue) => {
+    const errors = result.error.issues.map((issue) => {
       const path = issue.path.length > 0 ? issue.path.join('.') : 'root';
-      console.error(`   - ${path}: ${issue.message}`);
+      return `${path}: ${issue.message}`;
     });
-    process.exit(1);
+    
+    const errorMessage = `${errorPrefix}\n${errors.map(e => `  - ${e}`).join('\n')}`;
+    logger.error(errorMessage);
+    throw new ValidationError(errorMessage, result.error);
   }
   
   return result.data;

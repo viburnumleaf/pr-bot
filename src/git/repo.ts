@@ -1,36 +1,43 @@
 import { Octokit } from '@octokit/rest';
 import { getGitHubToken } from './auth';
+import { GitHubClient } from '../services/github-client';
+import { RepositoryError } from '../errors';
 
-export const getDefaultBranch = async (repoFullName: string): Promise<string> => {
-  const [owner, repo] = repoFullName.split('/');
-  const token = getGitHubToken();
-  const octokit = new Octokit({ auth: token });
-
-  const { data } = await octokit.rest.repos.get({ owner, repo });
-  return data.default_branch;
+// Parses repository full name into owner and repo
+// @throws {RepositoryError} if format is invalid
+const parseRepository = (repoFullName: string): { owner: string; repo: string } => {
+  const parts = repoFullName.split('/');
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    throw new RepositoryError(
+      `Invalid repository format: ${repoFullName}. Expected format: owner/repo`
+    );
+  }
+  return { owner: parts[0], repo: parts[1] };
 };
 
+// Creates a GitHub client instance
+const createGitHubClient = (): GitHubClient => {
+  const token = getGitHubToken();
+  const octokit = new Octokit({ auth: token });
+  return new GitHubClient(octokit);
+};
+
+// Gets the default branch of a repository
+// @throws {RepositoryError} if repository is invalid or inaccessible
+export const getDefaultBranch = async (repoFullName: string): Promise<string> => {
+  const { owner, repo } = parseRepository(repoFullName);
+  const client = createGitHubClient();
+  return await client.getDefaultBranch(owner, repo);
+};
+
+// Creates a new branch from a base branch
+// @throws {RepositoryError} if branch creation fails
 export const createBranch = async (
   repoFullName: string,
   branchName: string,
   baseBranch: string
 ): Promise<void> => {
-  const [owner, repo] = repoFullName.split('/');
-  const token = getGitHubToken();
-  const octokit = new Octokit({ auth: token });
-
-  // Get the SHA of the base branch
-  const { data: refData } = await octokit.rest.git.getRef({
-    owner,
-    repo,
-    ref: `heads/${baseBranch}`
-  });
-
-  // Create new branch from base branch
-  await octokit.rest.git.createRef({
-    owner,
-    repo,
-    ref: `refs/heads/${branchName}`,
-    sha: refData.object.sha
-  });
+  const { owner, repo } = parseRepository(repoFullName);
+  const client = createGitHubClient();
+  await client.createBranch(owner, repo, branchName, baseBranch);
 };

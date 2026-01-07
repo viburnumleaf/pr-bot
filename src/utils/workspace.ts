@@ -1,90 +1,87 @@
 import { Octokit } from '@octokit/rest';
+import { GitHubClient } from '../services/github-client';
 import { WorkspaceType, type WorkspaceConfig, type PackageJsonLocation } from '../types/workspace';
+import { FILE_PATTERNS, WORKSPACE_PATTERNS } from '../constants';
+import { logger } from '../services/logger';
 
-// Helper: Check if file exists via GitHub API
-const fileExists = async (
-  octokit: Octokit,
-  owner: string,
-  repo: string,
-  path: string,
-  branch: string
-): Promise<boolean> => {
-  try {
-    await octokit.rest.repos.getContent({
-      owner,
-      repo,
-      path,
-      ref: branch
-    });
-    return true;
-  } catch {
-    return false;
-  }
+// Creates a GitHub client instance
+const createGitHubClient = (octokit: Octokit): GitHubClient => {
+  return new GitHubClient(octokit);
 };
 
-// Helper: Read and parse package.json from GitHub
+// Reads and parses package.json from GitHub
 const readPackageJson = async (
-  octokit: Octokit,
+  client: GitHubClient,
   owner: string,
   repo: string,
   branch: string
 ) => {
-  const { data } = await octokit.rest.repos.getContent({
+  const { content } = await client.getFileContent(
     owner,
     repo,
-    path: 'package.json',
-    ref: branch
-  });
+    FILE_PATTERNS.PACKAGE_JSON,
+    branch
+  );
 
-  if (Array.isArray(data) || data.type !== 'file') {
-    throw new Error('package.json is not a file');
-  }
-
-  const content = Buffer.from(data.content, 'base64').toString('utf-8');
   return JSON.parse(content) as {
     workspaces?: string[] | { packages?: string[] };
   };
 };
 
-// Helper: Check for pnpm workspace
+// Checks for pnpm workspace configuration
 const checkPnpmWorkspace = async (
-  octokit: Octokit,
+  client: GitHubClient,
   owner: string,
   repo: string,
   branch: string
 ): Promise<boolean> => {
-  return await fileExists(octokit, owner, repo, 'pnpm-workspace.yaml', branch);
+  return await client.fileExists(
+    owner,
+    repo,
+    FILE_PATTERNS.PNPM_WORKSPACE,
+    branch
+  );
 };
 
-// Helper: Check for yarn workspace
+// Checks for yarn workspace configuration
 const checkYarnWorkspace = async (
-  octokit: Octokit,
+  client: GitHubClient,
   owner: string,
   repo: string,
   branch: string
 ): Promise<boolean> => {
-  return await fileExists(octokit, owner, repo, 'yarn.lock', branch);
+  return await client.fileExists(
+    owner,
+    repo,
+    FILE_PATTERNS.YARN_LOCK,
+    branch
+  );
 };
 
-// Helper: Check for npm workspace
+// Checks for npm workspace configuration
 const checkNpmWorkspace = async (
-  octokit: Octokit,
+  client: GitHubClient,
   owner: string,
   repo: string,
   branch: string
 ): Promise<boolean> => {
-  return await fileExists(octokit, owner, repo, 'package-lock.json', branch);
+  return await client.fileExists(
+    owner,
+    repo,
+    FILE_PATTERNS.NPM_LOCK,
+    branch
+  );
 };
 
-// Helper: Check if package.json has workspaces field
+// Checks if package.json has workspaces field
 const hasWorkspacesField = async (
-  octokit: Octokit,
+  client: GitHubClient,
   owner: string,
   repo: string,
   branch: string
 ): Promise<boolean> => {
   try {
-    const packageJson = await readPackageJson(octokit, owner, repo, branch);
+    const packageJson = await readPackageJson(client, owner, repo, branch);
     return !!packageJson.workspaces;
   } catch {
     return false;
@@ -98,93 +95,94 @@ export const detectWorkspaceType = async (
   repo: string,
   branch: string
 ): Promise<WorkspaceType> => {
-  if (await checkPnpmWorkspace(octokit, owner, repo, branch)) {
+  const client = createGitHubClient(octokit);
+
+  if (await checkPnpmWorkspace(client, owner, repo, branch)) {
     return WorkspaceType.PNPM;
   }
 
-  if (!(await hasWorkspacesField(octokit, owner, repo, branch))) {
+  if (!(await hasWorkspacesField(client, owner, repo, branch))) {
     return WorkspaceType.NONE;
   }
 
-  if (await checkYarnWorkspace(octokit, owner, repo, branch)) {
+  if (await checkYarnWorkspace(client, owner, repo, branch)) {
     return WorkspaceType.YARN;
   }
 
-  if (await checkNpmWorkspace(octokit, owner, repo, branch)) {
+  if (await checkNpmWorkspace(client, owner, repo, branch)) {
     return WorkspaceType.NPM;
   }
 
   return WorkspaceType.NPM;
 };
 
-// Helper: Parse pnpm workspace from YAML
+// Parses pnpm workspace configuration from YAML
 const parsePnpmWorkspace = async (
-  octokit: Octokit,
+  client: GitHubClient,
   owner: string,
   repo: string,
   branch: string
 ): Promise<string[]> => {
-  const { data } = await octokit.rest.repos.getContent({
-    owner,
-    repo,
-    path: 'pnpm-workspace.yaml',
-    ref: branch
-  });
+  try {
+    const { content } = await client.getFileContent(
+      owner,
+      repo,
+      FILE_PATTERNS.PNPM_WORKSPACE,
+      branch
+    );
 
-  if (Array.isArray(data) || data.type !== 'file') {
-    return ['packages/*'];
-  }
+    const workspaces: string[] = [];
+    const lines = content.split('\n');
+    let inPackagesSection = false;
 
-  const content = Buffer.from(data.content, 'base64').toString('utf-8');
-  const workspaces: string[] = [];
-  const lines = content.split('\n');
-  let inPackagesSection = false;
+    for (const line of lines) {
+      const trimmed = line.trim();
 
-  for (const line of lines) {
-    const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) {
+        continue;
+      }
 
-    if (!trimmed || trimmed.startsWith('#')) {
-      continue;
-    }
+      if (trimmed.startsWith('packages:')) {
+        inPackagesSection = true;
+        continue;
+      }
 
-    if (trimmed.startsWith('packages:')) {
-      inPackagesSection = true;
-      continue;
-    }
+      if (!inPackagesSection) {
+        continue;
+      }
 
-    if (!inPackagesSection) {
-      continue;
-    }
+      if (trimmed.includes(':')) {
+        break;
+      }
 
-    if (trimmed.includes(':')) {
-      break;
-    }
+      if (trimmed.startsWith('-')) {
+        const workspace = trimmed.slice(1).trim().replace(/['"]/g, '');
+        if (workspace) {
+          workspaces.push(workspace);
+        }
+        continue;
+      }
 
-    if (trimmed.startsWith('-')) {
-      const workspace = trimmed.slice(1).trim().replace(/['"]/g, '');
+      const workspace = trimmed.replace(/['"]/g, '');
       if (workspace) {
         workspaces.push(workspace);
       }
-      continue;
     }
 
-    const workspace = trimmed.replace(/['"]/g, '');
-    if (workspace) {
-      workspaces.push(workspace);
-    }
+    return workspaces.length > 0 ? workspaces : [WORKSPACE_PATTERNS.DEFAULT_PNPM];
+  } catch {
+    return [WORKSPACE_PATTERNS.DEFAULT_PNPM];
   }
-
-  return workspaces.length > 0 ? workspaces : ['packages/*'];
 };
 
-// Helper: Parse yarn/npm workspace from package.json
+// Parses yarn/npm workspace configuration from package.json
 const parseYarnNpmWorkspace = async (
-  octokit: Octokit,
+  client: GitHubClient,
   owner: string,
   repo: string,
   branch: string
 ): Promise<string[]> => {
-  const packageJson = await readPackageJson(octokit, owner, repo, branch);
+  const packageJson = await readPackageJson(client, owner, repo, branch);
 
   if (!packageJson.workspaces) {
     return [];
@@ -208,24 +206,25 @@ export const getWorkspaceConfig = async (
   repo: string,
   branch: string
 ): Promise<WorkspaceConfig> => {
+  const client = createGitHubClient(octokit);
   const type = await detectWorkspaceType(octokit, owner, repo, branch);
 
   if (type === WorkspaceType.PNPM) {
-    const workspaces = await parsePnpmWorkspace(octokit, owner, repo, branch);
+    const workspaces = await parsePnpmWorkspace(client, owner, repo, branch);
     return { type, workspaces };
   }
 
   if (type === WorkspaceType.YARN || type === WorkspaceType.NPM) {
-    const workspaces = await parseYarnNpmWorkspace(octokit, owner, repo, branch);
+    const workspaces = await parseYarnNpmWorkspace(client, owner, repo, branch);
     return { type, workspaces };
   }
 
   return { type, workspaces: [] };
 };
 
-// Helper: Expand glob pattern by listing directories from GitHub
+// Expands glob pattern by listing directories from GitHub
 const expandWorkspacePattern = async (
-  octokit: Octokit,
+  client: GitHubClient,
   owner: string,
   repo: string,
   pattern: string,
@@ -242,23 +241,19 @@ const expandWorkspacePattern = async (
 
     const searchRecursive = async (dirPath: string): Promise<void> => {
       try {
-        const { data } = await octokit.rest.repos.getContent({
+        const items = await client.getDirectoryContent(
           owner,
           repo,
-          path: dirPath || '.',
-          ref: branch
-        });
+          dirPath || '.',
+          branch
+        );
 
-        if (!Array.isArray(data)) {
-          return;
-        }
-
-        for (const item of data) {
+        for (const item of items) {
           if (item.type === 'dir') {
             const itemPath = dirPath ? `${dirPath}/${item.name}` : item.name;
-            const packageJsonPath = `${itemPath}/package.json`;
+            const packageJsonPath = `${itemPath}/${FILE_PATTERNS.PACKAGE_JSON}`;
 
-            if (await fileExists(octokit, owner, repo, packageJsonPath, branch)) {
+            if (await client.fileExists(owner, repo, packageJsonPath, branch)) {
               results.push(itemPath);
             }
 
@@ -266,7 +261,7 @@ const expandWorkspacePattern = async (
           }
         }
       } catch {
-        // Ignore errors
+        // Ignore errors for missing directories
       }
     };
 
@@ -278,18 +273,14 @@ const expandWorkspacePattern = async (
   const basePattern = pattern.replace(/\/\*$/, '');
   
   try {
-    const { data } = await octokit.rest.repos.getContent({
+    const items = await client.getDirectoryContent(
       owner,
       repo,
-      path: basePattern,
-      ref: branch
-    });
+      basePattern,
+      branch
+    );
 
-    if (!Array.isArray(data)) {
-      return [];
-    }
-
-    return data
+    return items
       .filter(item => item.type === 'dir')
       .map(item => `${basePattern}/${item.name}`);
   } catch {
@@ -306,29 +297,30 @@ export const findPackageJsonFiles = async (
   repo: string,
   branch: string
 ): Promise<PackageJsonLocation[]> => {
+  const client = createGitHubClient(octokit);
   const locations: PackageJsonLocation[] = [];
 
   // If specific path is provided, use only that
   if (specificPath) {
-    const normalizedPath = specificPath.endsWith('package.json')
+    const normalizedPath = specificPath.endsWith(FILE_PATTERNS.PACKAGE_JSON)
       ? specificPath
-      : `${specificPath}/package.json`;
+      : `${specificPath}/${FILE_PATTERNS.PACKAGE_JSON}`;
 
-    if (!(await fileExists(octokit, owner, repo, normalizedPath, branch))) {
+    if (!(await client.fileExists(owner, repo, normalizedPath, branch))) {
       throw new Error(`package.json not found at ${normalizedPath}`);
     }
 
     return [{
       path: normalizedPath,
-      relativePath: normalizedPath
+      relativePath: normalizedPath,
     }];
   }
 
   // Check root package.json
-  if (await fileExists(octokit, owner, repo, 'package.json', branch)) {
+  if (await client.fileExists(owner, repo, FILE_PATTERNS.PACKAGE_JSON, branch)) {
     locations.push({
-      path: 'package.json',
-      relativePath: 'package.json'
+      path: FILE_PATTERNS.PACKAGE_JSON,
+      relativePath: FILE_PATTERNS.PACKAGE_JSON,
     });
   }
 
@@ -337,12 +329,18 @@ export const findPackageJsonFiles = async (
 
   if (workspaceConfig.type !== WorkspaceType.NONE && workspaceConfig.workspaces.length > 0) {
     for (const workspacePattern of workspaceConfig.workspaces) {
-      const expanded = await expandWorkspacePattern(octokit, owner, repo, workspacePattern, branch);
+      const expanded = await expandWorkspacePattern(
+        client,
+        owner,
+        repo,
+        workspacePattern,
+        branch
+      );
 
       for (const workspacePath of expanded) {
-        const packageJsonPath = `${workspacePath}/package.json`;
+        const packageJsonPath = `${workspacePath}/${FILE_PATTERNS.PACKAGE_JSON}`;
 
-        if (!(await fileExists(octokit, owner, repo, packageJsonPath, branch))) {
+        if (!(await client.fileExists(owner, repo, packageJsonPath, branch))) {
           continue;
         }
 
@@ -353,7 +351,7 @@ export const findPackageJsonFiles = async (
 
         locations.push({
           path: packageJsonPath,
-          relativePath: packageJsonPath
+          relativePath: packageJsonPath,
         });
       }
     }
