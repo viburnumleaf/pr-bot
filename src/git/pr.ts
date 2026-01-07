@@ -1,29 +1,28 @@
 import { Octokit } from '@octokit/rest';
 import simpleGit from 'simple-git';
-import { getGitHubToken } from './auth.js';
+import { getGitHubToken } from './auth';
+import type { PullRequestResult } from '../types/github';
 
 /**
  * Commits changes, pushes branch and creates a pull request
- * @param {string} repoPath - Path to the cloned repository
- * @param {string} repoFullName - Repository full name (owner/name)
- * @param {string} branchName - Branch name
- * @param {string} packageName - Package name that was updated
- * @param {string} version - New version
- * @returns {Promise<{prUrl: string, prNumber: number}>}
  */
-export const createPullRequest = async (repoPath, repoFullName, branchName, packageName, version) => {
+export const createPullRequest = async (
+  repoPath: string,
+  repoFullName: string,
+  branchName: string,
+  packageName: string,
+  version: string
+): Promise<PullRequestResult> => {
   const [owner, repo] = repoFullName.split('/');
   const token = getGitHubToken();
   const octokit = new Octokit({ auth: token });
   
   // Configure git with environment variables for authentication
-  const git = simpleGit(repoPath, {
-    env: {
-      ...process.env,
-      GIT_ASKPASS: 'echo',
-      GIT_TERMINAL_PROMPT: '0',
-    }
-  });
+  // Set environment variables before creating git instance
+  process.env.GIT_ASKPASS = 'echo';
+  process.env.GIT_TERMINAL_PROMPT = '0';
+  
+  const git = simpleGit(repoPath);
 
   // Configure git user
   await git.addConfig('user.name', 'PR Bot', false, 'local');
@@ -43,7 +42,8 @@ export const createPullRequest = async (repoPath, repoFullName, branchName, pack
     await git.push(['-u', 'origin', branchName]);
   } catch (error) {
     // Check if it's a permission error
-    if (error.message?.includes('403') || error.message?.includes('Permission')) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes('403') || errorMessage.includes('Permission')) {
       throw new Error(`Permission denied. Please check that your GITHUB_TOKEN has 'repo' scope and write access to ${repoFullName}`);
     }
     throw error;

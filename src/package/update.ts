@@ -1,22 +1,26 @@
 import fs from 'fs/promises';
 import path from 'path';
+import type { PackageUpdateResult, DependencySection } from '../types/package';
 
 /**
  * Updates a dependency version in package.json
- * @param {string} repoPath - Path to the cloned repository
- * @param {string} packageName - Name of the package to update
- * @param {string} version - Target version
- * @returns {Promise<{updated: boolean, diff: string, packageJsonPath: string, updatedIn: string}>}
  */
-export const updatePackageJson = async (repoPath, packageName, version) => {
+export const updatePackageJson = async (
+  repoPath: string,
+  packageName: string,
+  version: string
+): Promise<PackageUpdateResult> => {
   const packageJsonPath = path.join(repoPath, 'package.json');
   
   const content = await fs.readFile(packageJsonPath, 'utf-8');
-  const packageJson = JSON.parse(content);
+  const packageJson = JSON.parse(content) as {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+  };
   const originalContent = content;
   
   // Find which section contains the package
-  let updatedIn = null;
+  let updatedIn: DependencySection | null = null;
   if (packageJson.dependencies?.[packageName]) {
     updatedIn = 'dependencies';
     packageJson.dependencies[packageName] = version;
@@ -36,11 +40,11 @@ export const updatePackageJson = async (repoPath, packageName, version) => {
 };
 
 // Generates a simple diff showing the changed line
-const generateDiff = (original, updated, filePath) => {
+const generateDiff = (original: string, updated: string, filePath: string): string => {
   const originalLines = original.split('\n');
   const updatedLines = updated.split('\n');
   
-  const diff = [`--- ${filePath} (original)`, `+++ ${filePath} (updated)`, ''];
+  const diff: string[] = [`--- ${filePath} (original)`, `+++ ${filePath} (updated)`, ''];
   
   // Find the first changed line
   const maxLength = Math.max(originalLines.length, updatedLines.length);

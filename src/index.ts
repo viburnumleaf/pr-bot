@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
-import { prepare } from './utils/prepare.js';
-import { generateBranchName } from './utils/branch.js';
-import { setupRepository } from './utils/repo.js';
-import { updateDependency } from './utils/package.js';
-import { createPR } from './utils/pr.js';
+import { prepare } from './utils/prepare';
+import { generateBranchName } from './utils/branch';
+import { setupRepository } from './utils/repo';
+import { updateDependency } from './utils/package';
+import { createPR } from './utils/pr';
 
-const bootstrap = async () => {
+const bootstrap = async (): Promise<void> => {
   const options = prepare();
   const branchName = generateBranchName(options.package, options.version);
   const repoPath = await setupRepository(options.repo, branchName);
@@ -15,7 +15,7 @@ const bootstrap = async () => {
   await createPR(repoPath, options.repo, branchName, options.package, options.version);
 };
 
-bootstrap().catch((error) => {
+bootstrap().catch((error: Error) => {
   console.error(`❌ Error: ${error.message}`);
   process.exit(1);
 });

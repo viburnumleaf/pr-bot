@@ -2,9 +2,9 @@ import simpleGit from 'simple-git';
 import os from 'os';
 import path from 'path';
 import fs from 'fs/promises';
-import { getGitHubToken } from './auth.js';
+import { getGitHubToken } from './auth';
 
-export const cloneRepo = async (repoFullName, branchName) => {
+export const cloneRepo = async (repoFullName: string, branchName: string): Promise<string> => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pr-bot-'));
   const git = simpleGit();
 
@@ -18,4 +18,4 @@ export const cloneRepo = async (repoFullName, branchName) => {
   await repoGit.checkoutLocalBranch(branchName);
 
   return tmpDir;
-}
+};
