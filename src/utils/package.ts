@@ -21,8 +21,8 @@ const parseRepository = (repoFullName: string): { owner: string; repo: string } 
 };
 
 // Creates a GitHub client instance
-const createGitHubClient = (repoFullName: string): GitHubClient => {
-  const token = getGitHubToken(repoFullName);
+const createGitHubClient = (): GitHubClient => {
+  const token = getGitHubToken();
   const octokit = new Octokit({ auth: token });
   return new GitHubClient(octokit);
 };
@@ -36,8 +36,8 @@ export const updateDependency = async (
   options: CliOptions
 ): Promise<{ result: MultiPackageUpdateResult; fileUpdates: PackageFileUpdate[] }> => {
   const { owner, repo } = parseRepository(repoFullName);
-  const client = createGitHubClient(repoFullName);
-  const octokit = new Octokit({ auth: getGitHubToken(repoFullName) });
+  const client = createGitHubClient();
+  const octokit = new Octokit({ auth: getGitHubToken() });
 
   // Find all package.json files
   const packageJsonLocations = await findPackageJsonFiles(

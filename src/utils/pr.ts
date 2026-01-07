@@ -20,8 +20,8 @@ const parseRepository = (repoFullName: string): { owner: string; repo: string } 
 };
 
 // Creates a GitHub client instance
-const createGitHubClient = (repoFullName: string): GitHubClient => {
-  const token = getGitHubToken(repoFullName);
+const createGitHubClient = (): GitHubClient => {
+  const token = getGitHubToken();
   const octokit = new Octokit({ auth: token });
   return new GitHubClient(octokit);
 };
@@ -36,7 +36,7 @@ export const createPR = async (
   fileUpdates: PackageFileUpdate[]
 ): Promise<PullRequestResult> => {
   const { owner, repo: repoName } = parseRepository(repo);
-  const client = createGitHubClient(repo);
+  const client = createGitHubClient();
 
   // Check for existing PR
   logger.info(`Checking for existing PRs for ${packageName}@${version}...`);

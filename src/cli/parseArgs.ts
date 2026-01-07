@@ -39,7 +39,6 @@ Examples:
 
 Environment Variables:
   GITHUB_TOKEN    GitHub personal access token (required)
-  GITHUB_NAME     Repository name in format owner/repo (must match --repo parameter)
     `
     );
 

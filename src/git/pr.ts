@@ -18,8 +18,8 @@ const parseRepository = (repoFullName: string): { owner: string; repo: string } 
 };
 
 // Creates a GitHub client instance
-const createGitHubClient = (repoFullName: string): GitHubClient => {
-  const token = getGitHubToken(repoFullName);
+const createGitHubClient = (): GitHubClient => {
+  const token = getGitHubToken();
   const octokit = new Octokit({ auth: token });
   return new GitHubClient(octokit);
 };
@@ -34,7 +34,7 @@ export const createPullRequest = async (
   fileUpdates: PackageFileUpdate[]
 ): Promise<PullRequestResult> => {
   const { owner, repo } = parseRepository(repoFullName);
-  const client = createGitHubClient(repoFullName);
+  const client = createGitHubClient();
 
   // Get file contents and update them
   const commitMessage = generateCommitMessage(packageName, version);
