@@ -1,22 +1,18 @@
-import fs from 'fs/promises';
 import type { PackageUpdateResult, DependencySection, MultiPackageUpdateResult } from '../types/package';
-import type { PackageJsonLocation } from '../types/workspace';
 
-// Updates a dependency version in a single package.json file
-export const updatePackageJson = async (
-  packageJsonPath: string,
+// Updates a dependency version in package.json content
+export const updatePackageJsonContent = (
+  content: string,
   packageName: string,
   version: string
-): Promise<PackageUpdateResult | null> => {
-  const content = await fs.readFile(packageJsonPath, 'utf-8');
+): { updated: boolean; newContent: string; updatedIn: DependencySection | null } => {
   const packageJson = JSON.parse(content) as {
     dependencies?: Record<string, string>;
     devDependencies?: Record<string, string>;
   };
-  const originalContent = content;
   
-  // Find which section contains the package
   let updatedIn: DependencySection | null = null;
+  
   if (packageJson.dependencies?.[packageName]) {
     updatedIn = 'dependencies';
     packageJson.dependencies[packageName] = version;
@@ -24,50 +20,15 @@ export const updatePackageJson = async (
     updatedIn = 'devDependencies';
     packageJson.devDependencies[packageName] = version;
   } else {
-    // Package not found in this package.json, return null
-    return null;
+    return { updated: false, newContent: content, updatedIn: null };
   }
   
-  const updatedContent = JSON.stringify(packageJson, null, 2) + '\n';
-  await fs.writeFile(packageJsonPath, updatedContent, 'utf-8');
-  
-  const diff = generateDiff(originalContent, updatedContent, packageJsonPath);
-  
-  return { updated: true, diff, packageJsonPath, updatedIn };
-};
-
-// Updates a dependency version in multiple package.json files (monorepo)
-export const updateMultiplePackageJson = async (
-  repoPath: string,
-  packageJsonLocations: PackageJsonLocation[],
-  packageName: string,
-  version: string
-): Promise<MultiPackageUpdateResult> => {
-  const results: PackageUpdateResult[] = [];
-  
-  for (const location of packageJsonLocations) {
-    const result = await updatePackageJson(location.path, packageName, version);
-    if (result) {
-      results.push(result);
-    }
-  }
-  
-  if (results.length === 0) {
-    throw new Error(
-      `❌ Dependency "${packageName}" not found in any package.json files. ` +
-      `Searched ${packageJsonLocations.length} file(s): ${packageJsonLocations.map(l => l.relativePath).join(', ')}`
-    );
-  }
-  
-  return {
-    updated: true,
-    results,
-    totalUpdated: results.length
-  };
+  const newContent = JSON.stringify(packageJson, null, 2) + '\n';
+  return { updated: true, newContent, updatedIn };
 };
 
 // Generates a simple diff showing the changed line
-const generateDiff = (original: string, updated: string, filePath: string): string => {
+export const generateDiff = (original: string, updated: string, filePath: string): string => {
   const originalLines = original.split('\n');
   const updatedLines = updated.split('\n');
   
@@ -105,4 +66,51 @@ const generateDiff = (original: string, updated: string, filePath: string): stri
   }
   
   return diff.join('\n');
+};
+
+export type PackageFileUpdate = {
+  path: string;
+  content: string;
+  updatedIn: DependencySection;
+  diff: string;
+};
+
+// Updates multiple package.json files and returns updates
+export const updateMultiplePackageJson = (
+  packageJsonFiles: Array<{ path: string; content: string }>,
+  packageName: string,
+  version: string
+): MultiPackageUpdateResult => {
+  const results: PackageUpdateResult[] = [];
+  
+  for (const file of packageJsonFiles) {
+    const { updated, newContent, updatedIn } = updatePackageJsonContent(
+      file.content,
+      packageName,
+      version
+    );
+    
+    if (updated && updatedIn) {
+      const diff = generateDiff(file.content, newContent, file.path);
+      results.push({
+        updated: true,
+        diff,
+        packageJsonPath: file.path,
+        updatedIn
+      });
+    }
+  }
+  
+  if (results.length === 0) {
+    throw new Error(
+      `❌ Dependency "${packageName}" not found in any package.json files. ` +
+      `Searched ${packageJsonFiles.length} file(s): ${packageJsonFiles.map(f => f.path).join(', ')}`
+    );
+  }
+  
+  return {
+    updated: true,
+    results,
+    totalUpdated: results.length
+  };
 };

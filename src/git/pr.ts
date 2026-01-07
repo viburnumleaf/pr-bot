@@ -1,50 +1,95 @@
 import { Octokit } from '@octokit/rest';
-import simpleGit from 'simple-git';
 import { getGitHubToken } from './auth';
 import type { PullRequestResult } from '../types/github';
+import type { PackageFileUpdate } from '../package/update';
 
-// Commits changes, pushes branch and creates a pull request
+// Gets file content from GitHub
+const getFileContent = async (
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  path: string,
+  branch: string
+): Promise<{ content: string; sha: string }> => {
+  try {
+    const { data } = await octokit.rest.repos.getContent({
+      owner,
+      repo,
+      path,
+      ref: branch
+    });
+
+    if (Array.isArray(data) || data.type !== 'file') {
+      throw new Error(`Path ${path} is not a file`);
+    }
+
+    const content = Buffer.from(data.content, 'base64').toString('utf-8');
+    return { content, sha: data.sha };
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('404')) {
+      throw new Error(`File ${path} not found in repository`);
+    }
+    throw error;
+  }
+};
+
+// Updates file content on GitHub
+const updateFileContent = async (
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  path: string,
+  content: string,
+  sha: string,
+  branch: string,
+  message: string
+): Promise<void> => {
+  const encodedContent = Buffer.from(content).toString('base64');
+
+  await octokit.rest.repos.createOrUpdateFileContents({
+    owner,
+    repo,
+    path,
+    message,
+    content: encodedContent,
+    sha,
+    branch
+  });
+};
+
+// Commits changes and creates a pull request
 export const createPullRequest = async (
-  repoPath: string,
   repoFullName: string,
   branchName: string,
+  baseBranch: string,
   packageName: string,
-  version: string
+  version: string,
+  fileUpdates: PackageFileUpdate[]
 ): Promise<PullRequestResult> => {
   const [owner, repo] = repoFullName.split('/');
   const token = getGitHubToken();
   const octokit = new Octokit({ auth: token });
-  
-  // Configure git with environment variables for authentication
-  // Set environment variables before creating git instance
-  process.env.GIT_ASKPASS = 'echo';
-  process.env.GIT_TERMINAL_PROMPT = '0';
-  
-  const git = simpleGit(repoPath);
 
-  // Configure git user
-  await git.addConfig('user.name', 'PR Bot', false, 'local');
-  await git.addConfig('user.email', 'pr-bot@example.com', false, 'local');
+  // Get file contents and update them
+  for (const fileUpdate of fileUpdates) {
+    const { content: currentContent, sha } = await getFileContent(
+      octokit,
+      owner,
+      repo,
+      fileUpdate.path,
+      branchName
+    );
 
-  // Commit changes
-  await git.add('package.json');
-  await git.commit(`chore: bump ${packageName} to ${version}`);
-
-  // Push branch - ensure remote URL includes token
-  const repoUrl = `https://${token}@github.com/${repoFullName}.git`;
-  
-  // Force update remote URL to include token
-  await git.raw(['remote', 'set-url', 'origin', repoUrl]);
-  
-  try {
-    await git.push(['-u', 'origin', branchName]);
-  } catch (error) {
-    // Check if it's a permission error
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    if (errorMessage.includes('403') || errorMessage.includes('Permission')) {
-      throw new Error(`Permission denied. Please check that your GITHUB_TOKEN has 'repo' scope and write access to ${repoFullName}`);
-    }
-    throw error;
+    await updateFileContent(
+      octokit,
+      owner,
+      repo,
+      fileUpdate.path,
+      fileUpdate.content,
+      sha,
+      branchName,
+      `chore: bump ${packageName} to ${version}`
+    );
   }
 
   // Create pull request
@@ -53,7 +98,7 @@ export const createPullRequest = async (
     repo,
     title: `chore: bump ${packageName} to ${version}`,
     head: branchName,
-    base: 'main',
+    base: baseBranch,
     body: `This PR updates \`${packageName}\` to version \`${version}\`.`
   });
 

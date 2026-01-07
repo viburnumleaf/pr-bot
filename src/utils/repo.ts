@@ -1,9 +1,14 @@
-import { cloneRepo } from '../git/repo';
+import { getDefaultBranch, createBranch } from '../git/repo';
 
-export const setupRepository = async (repo: string, branchName: string): Promise<string> => {
-  const repoPath = await cloneRepo(repo, branchName);
-  console.log('✅ Repository cloned and new branch created:');
-  console.log(`Path: ${repoPath}`);
-  console.log(`Branch: ${branchName}`);
-  return repoPath;
+export const setupBranch = async (
+  repo: string,
+  branchName: string
+): Promise<string> => {
+  const baseBranch = await getDefaultBranch(repo);
+  console.log(`✅ Default branch: ${baseBranch}`);
+  
+  await createBranch(repo, branchName, baseBranch);
+  console.log(`✅ Branch created: ${branchName}`);
+  
+  return baseBranch;
 };

@@ -1,21 +1,36 @@
-import simpleGit from 'simple-git';
-import os from 'os';
-import path from 'path';
-import fs from 'fs/promises';
+import { Octokit } from '@octokit/rest';
 import { getGitHubToken } from './auth';
 
-export const cloneRepo = async (repoFullName: string, branchName: string): Promise<string> => {
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pr-bot-'));
-  const git = simpleGit();
+export const getDefaultBranch = async (repoFullName: string): Promise<string> => {
+  const [owner, repo] = repoFullName.split('/');
+  const token = getGitHubToken();
+  const octokit = new Octokit({ auth: token });
 
-  const repoUrl = `https://<token>@github.com/${repoFullName}.git`.replace('<token>', getGitHubToken());
+  const { data } = await octokit.rest.repos.get({ owner, repo });
+  return data.default_branch;
+};
 
-  console.log(`Cloning ${repoFullName} into ${tmpDir}...`);
-  await git.clone(repoUrl, tmpDir);
+export const createBranch = async (
+  repoFullName: string,
+  branchName: string,
+  baseBranch: string
+): Promise<void> => {
+  const [owner, repo] = repoFullName.split('/');
+  const token = getGitHubToken();
+  const octokit = new Octokit({ auth: token });
 
-  const repoGit = simpleGit(tmpDir);
-  console.log(`Checking out new branch: ${branchName}`);
-  await repoGit.checkoutLocalBranch(branchName);
+  // Get the SHA of the base branch
+  const { data: refData } = await octokit.rest.git.getRef({
+    owner,
+    repo,
+    ref: `heads/${baseBranch}`
+  });
 
-  return tmpDir;
+  // Create new branch from base branch
+  await octokit.rest.git.createRef({
+    owner,
+    repo,
+    ref: `refs/heads/${branchName}`,
+    sha: refData.object.sha
+  });
 };

@@ -1,48 +1,90 @@
-import fs from 'fs/promises';
-import path from 'path';
+import { Octokit } from '@octokit/rest';
 import { WorkspaceType, type WorkspaceConfig, type PackageJsonLocation } from '../types/workspace';
 
-// Helper: Check if file exists
-const fileExists = async (filePath: string): Promise<boolean> => {
+// Helper: Check if file exists via GitHub API
+const fileExists = async (
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  path: string,
+  branch: string
+): Promise<boolean> => {
   try {
-    await fs.access(filePath);
+    await octokit.rest.repos.getContent({
+      owner,
+      repo,
+      path,
+      ref: branch
+    });
     return true;
   } catch {
     return false;
   }
 };
 
-// Helper: Read and parse package.json
-const readPackageJson = async (repoPath: string) => {
-  const packageJsonPath = path.join(repoPath, 'package.json');
-  const content = await fs.readFile(packageJsonPath, 'utf-8');
+// Helper: Read and parse package.json from GitHub
+const readPackageJson = async (
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  branch: string
+) => {
+  const { data } = await octokit.rest.repos.getContent({
+    owner,
+    repo,
+    path: 'package.json',
+    ref: branch
+  });
+
+  if (Array.isArray(data) || data.type !== 'file') {
+    throw new Error('package.json is not a file');
+  }
+
+  const content = Buffer.from(data.content, 'base64').toString('utf-8');
   return JSON.parse(content) as {
     workspaces?: string[] | { packages?: string[] };
   };
 };
 
 // Helper: Check for pnpm workspace
-const checkPnpmWorkspace = async (repoPath: string): Promise<boolean> => {
-  const pnpmWorkspacePath = path.join(repoPath, 'pnpm-workspace.yaml');
-  return await fileExists(pnpmWorkspacePath);
+const checkPnpmWorkspace = async (
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  branch: string
+): Promise<boolean> => {
+  return await fileExists(octokit, owner, repo, 'pnpm-workspace.yaml', branch);
 };
 
 // Helper: Check for yarn workspace
-const checkYarnWorkspace = async (repoPath: string): Promise<boolean> => {
-  const yarnLockPath = path.join(repoPath, 'yarn.lock');
-  return await fileExists(yarnLockPath);
+const checkYarnWorkspace = async (
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  branch: string
+): Promise<boolean> => {
+  return await fileExists(octokit, owner, repo, 'yarn.lock', branch);
 };
 
 // Helper: Check for npm workspace
-const checkNpmWorkspace = async (repoPath: string): Promise<boolean> => {
-  const packageLockPath = path.join(repoPath, 'package-lock.json');
-  return await fileExists(packageLockPath);
+const checkNpmWorkspace = async (
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  branch: string
+): Promise<boolean> => {
+  return await fileExists(octokit, owner, repo, 'package-lock.json', branch);
 };
 
 // Helper: Check if package.json has workspaces field
-const hasWorkspacesField = async (repoPath: string): Promise<boolean> => {
+const hasWorkspacesField = async (
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  branch: string
+): Promise<boolean> => {
   try {
-    const packageJson = await readPackageJson(repoPath);
+    const packageJson = await readPackageJson(octokit, owner, repo, branch);
     return !!packageJson.workspaces;
   } catch {
     return false;
@@ -50,31 +92,50 @@ const hasWorkspacesField = async (repoPath: string): Promise<boolean> => {
 };
 
 // Detects workspace type by checking for workspace configuration files
-export const detectWorkspaceType = async (repoPath: string): Promise<WorkspaceType> => {
-  if (await checkPnpmWorkspace(repoPath)) {
+export const detectWorkspaceType = async (
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  branch: string
+): Promise<WorkspaceType> => {
+  if (await checkPnpmWorkspace(octokit, owner, repo, branch)) {
     return WorkspaceType.PNPM;
   }
 
-  if (!(await hasWorkspacesField(repoPath))) {
+  if (!(await hasWorkspacesField(octokit, owner, repo, branch))) {
     return WorkspaceType.NONE;
   }
 
-  if (await checkYarnWorkspace(repoPath)) {
+  if (await checkYarnWorkspace(octokit, owner, repo, branch)) {
     return WorkspaceType.YARN;
   }
 
-  if (await checkNpmWorkspace(repoPath)) {
+  if (await checkNpmWorkspace(octokit, owner, repo, branch)) {
     return WorkspaceType.NPM;
   }
 
-  // Default to npm if workspaces are defined but no lock file found
   return WorkspaceType.NPM;
 };
 
 // Helper: Parse pnpm workspace from YAML
-const parsePnpmWorkspace = async (repoPath: string): Promise<string[]> => {
-  const pnpmWorkspacePath = path.join(repoPath, 'pnpm-workspace.yaml');
-  const content = await fs.readFile(pnpmWorkspacePath, 'utf-8');
+const parsePnpmWorkspace = async (
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  branch: string
+): Promise<string[]> => {
+  const { data } = await octokit.rest.repos.getContent({
+    owner,
+    repo,
+    path: 'pnpm-workspace.yaml',
+    ref: branch
+  });
+
+  if (Array.isArray(data) || data.type !== 'file') {
+    return ['packages/*'];
+  }
+
+  const content = Buffer.from(data.content, 'base64').toString('utf-8');
   const workspaces: string[] = [];
   const lines = content.split('\n');
   let inPackagesSection = false;
@@ -117,8 +178,13 @@ const parsePnpmWorkspace = async (repoPath: string): Promise<string[]> => {
 };
 
 // Helper: Parse yarn/npm workspace from package.json
-const parseYarnNpmWorkspace = async (repoPath: string): Promise<string[]> => {
-  const packageJson = await readPackageJson(repoPath);
+const parseYarnNpmWorkspace = async (
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  branch: string
+): Promise<string[]> => {
+  const packageJson = await readPackageJson(octokit, owner, repo, branch);
 
   if (!packageJson.workspaces) {
     return [];
@@ -136,187 +202,162 @@ const parseYarnNpmWorkspace = async (repoPath: string): Promise<string[]> => {
 };
 
 // Gets workspace configuration
-export const getWorkspaceConfig = async (repoPath: string): Promise<WorkspaceConfig> => {
-  const type = await detectWorkspaceType(repoPath);
+export const getWorkspaceConfig = async (
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  branch: string
+): Promise<WorkspaceConfig> => {
+  const type = await detectWorkspaceType(octokit, owner, repo, branch);
 
   if (type === WorkspaceType.PNPM) {
-    const workspaces = await parsePnpmWorkspace(repoPath);
+    const workspaces = await parsePnpmWorkspace(octokit, owner, repo, branch);
     return { type, workspaces };
   }
 
   if (type === WorkspaceType.YARN || type === WorkspaceType.NPM) {
-    const workspaces = await parseYarnNpmWorkspace(repoPath);
+    const workspaces = await parseYarnNpmWorkspace(octokit, owner, repo, branch);
     return { type, workspaces };
   }
 
   return { type, workspaces: [] };
 };
 
-// Helper: Expand recursive glob pattern (**)
-const expandRecursivePattern = async (
-  repoPath: string,
-  pattern: string
-): Promise<string[]> => {
-  const basePattern = pattern.split('**')[0].replace(/\/$/, '');
-  const fullBasePath = path.join(repoPath, basePattern || '.');
-  const results: string[] = [];
-
-  const searchRecursive = async (dir: string, relativeDir: string): Promise<void> => {
-    try {
-      const entries = await fs.readdir(dir, { withFileTypes: true });
-
-      for (const entry of entries) {
-        if (!entry.isDirectory()) {
-          continue;
-        }
-
-        const entryPath = path.join(dir, entry.name);
-        const relativePath = path.join(relativeDir, entry.name);
-        const packageJsonPath = path.join(entryPath, 'package.json');
-
-        if (await fileExists(packageJsonPath)) {
-          results.push(path.join(basePattern || '.', relativePath));
-        }
-
-        await searchRecursive(entryPath, relativePath);
-      }
-    } catch {
-      // Ignore errors
-    }
-  };
-
-  await searchRecursive(fullBasePath, '');
-  return results;
-};
-
-// Helper: Expand simple glob pattern (*)
-const expandSimplePattern = async (repoPath: string, pattern: string): Promise<string[]> => {
-  const basePattern = pattern.replace(/\/\*$/, '');
-  const fullPath = path.join(repoPath, basePattern);
-
-  try {
-    const entries = await fs.readdir(fullPath, { withFileTypes: true });
-    return entries
-      .filter(entry => entry.isDirectory())
-      .map(entry => path.join(basePattern, entry.name));
-  } catch {
-    return [];
-  }
-};
-
-// Expands workspace glob patterns to actual paths
+// Helper: Expand glob pattern by listing directories from GitHub
 const expandWorkspacePattern = async (
-  repoPath: string,
-  pattern: string
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  pattern: string,
+  branch: string
 ): Promise<string[]> => {
   if (!pattern.includes('*')) {
     return [pattern];
   }
 
   if (pattern.includes('**')) {
-    return await expandRecursivePattern(repoPath, pattern);
+    // For recursive patterns, we'll search recursively
+    const basePattern = pattern.split('**')[0].replace(/\/$/, '');
+    const results: string[] = [];
+
+    const searchRecursive = async (dirPath: string): Promise<void> => {
+      try {
+        const { data } = await octokit.rest.repos.getContent({
+          owner,
+          repo,
+          path: dirPath || '.',
+          ref: branch
+        });
+
+        if (!Array.isArray(data)) {
+          return;
+        }
+
+        for (const item of data) {
+          if (item.type === 'dir') {
+            const itemPath = dirPath ? `${dirPath}/${item.name}` : item.name;
+            const packageJsonPath = `${itemPath}/package.json`;
+
+            if (await fileExists(octokit, owner, repo, packageJsonPath, branch)) {
+              results.push(itemPath);
+            }
+
+            await searchRecursive(itemPath);
+          }
+        }
+      } catch {
+        // Ignore errors
+      }
+    };
+
+    await searchRecursive(basePattern || '.');
+    return results;
   }
 
-  return await expandSimplePattern(repoPath, pattern);
+  // Handle simple * patterns
+  const basePattern = pattern.replace(/\/\*$/, '');
+  
+  try {
+    const { data } = await octokit.rest.repos.getContent({
+      owner,
+      repo,
+      path: basePattern,
+      ref: branch
+    });
+
+    if (!Array.isArray(data)) {
+      return [];
+    }
+
+    return data
+      .filter(item => item.type === 'dir')
+      .map(item => `${basePattern}/${item.name}`);
+  } catch {
+    return [];
+  }
 };
 
-// Helper: Handle specific path provided by user
-const handleSpecificPath = async (
-  repoPath: string,
-  specificPath: string
+// Finds all package.json files in the repository via GitHub API
+export const findPackageJsonFiles = async (
+  repoFullName: string,
+  specificPath: string | undefined,
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  branch: string
 ): Promise<PackageJsonLocation[]> => {
-  const normalizedPath = path.isAbsolute(specificPath)
-    ? specificPath
-    : path.join(repoPath, specificPath);
+  const locations: PackageJsonLocation[] = [];
 
-  const stat = await fs.stat(normalizedPath);
+  // If specific path is provided, use only that
+  if (specificPath) {
+    const normalizedPath = specificPath.endsWith('package.json')
+      ? specificPath
+      : `${specificPath}/package.json`;
 
-  if (stat.isDirectory()) {
-    const packageJsonPath = path.join(normalizedPath, 'package.json');
-    if (!(await fileExists(packageJsonPath))) {
-      throw new Error(`package.json not found at ${packageJsonPath}`);
-    }
-    return [{
-      path: packageJsonPath,
-      relativePath: path.relative(repoPath, packageJsonPath)
-    }];
-  }
-
-  if (normalizedPath.endsWith('package.json')) {
-    if (!(await fileExists(normalizedPath))) {
+    if (!(await fileExists(octokit, owner, repo, normalizedPath, branch))) {
       throw new Error(`package.json not found at ${normalizedPath}`);
     }
+
     return [{
       path: normalizedPath,
-      relativePath: path.relative(repoPath, normalizedPath)
+      relativePath: normalizedPath
     }];
   }
 
-  throw new Error(`Invalid path: ${normalizedPath}. Must be a directory or package.json file`);
-};
-
-// Helper: Add root package.json if exists
-const addRootPackageJson = async (
-  repoPath: string,
-  locations: PackageJsonLocation[]
-): Promise<void> => {
-  const rootPackageJson = path.join(repoPath, 'package.json');
-  if (await fileExists(rootPackageJson)) {
+  // Check root package.json
+  if (await fileExists(octokit, owner, repo, 'package.json', branch)) {
     locations.push({
-      path: rootPackageJson,
+      path: 'package.json',
       relativePath: 'package.json'
     });
   }
-};
 
-// Helper: Add workspace package.json files
-const addWorkspacePackageJson = async (
-  repoPath: string,
-  locations: PackageJsonLocation[],
-  workspaceConfig: WorkspaceConfig
-): Promise<void> => {
-  if (workspaceConfig.type === WorkspaceType.NONE || workspaceConfig.workspaces.length === 0) {
-    return;
-  }
+  // Find workspaces
+  const workspaceConfig = await getWorkspaceConfig(octokit, owner, repo, branch);
 
-  for (const workspacePattern of workspaceConfig.workspaces) {
-    const expanded = await expandWorkspacePattern(repoPath, workspacePattern);
+  if (workspaceConfig.type !== WorkspaceType.NONE && workspaceConfig.workspaces.length > 0) {
+    for (const workspacePattern of workspaceConfig.workspaces) {
+      const expanded = await expandWorkspacePattern(octokit, owner, repo, workspacePattern, branch);
 
-    for (const workspacePath of expanded) {
-      const fullWorkspacePath = path.join(repoPath, workspacePath);
-      const packageJsonPath = path.join(fullWorkspacePath, 'package.json');
+      for (const workspacePath of expanded) {
+        const packageJsonPath = `${workspacePath}/package.json`;
 
-      if (!(await fileExists(packageJsonPath))) {
-        continue;
+        if (!(await fileExists(octokit, owner, repo, packageJsonPath, branch))) {
+          continue;
+        }
+
+        const alreadyExists = locations.some(loc => loc.path === packageJsonPath);
+        if (alreadyExists) {
+          continue;
+        }
+
+        locations.push({
+          path: packageJsonPath,
+          relativePath: packageJsonPath
+        });
       }
-
-      const alreadyExists = locations.some(loc => loc.path === packageJsonPath);
-      if (alreadyExists) {
-        continue;
-      }
-
-      locations.push({
-        path: packageJsonPath,
-        relativePath: path.relative(repoPath, packageJsonPath)
-      });
     }
   }
-};
-
-// Finds all package.json files in the repository
-export const findPackageJsonFiles = async (
-  repoPath: string,
-  specificPath?: string
-): Promise<PackageJsonLocation[]> => {
-  if (specificPath) {
-    return await handleSpecificPath(repoPath, specificPath);
-  }
-
-  const locations: PackageJsonLocation[] = [];
-  await addRootPackageJson(repoPath, locations);
-
-  const workspaceConfig = await getWorkspaceConfig(repoPath);
-  await addWorkspacePackageJson(repoPath, locations, workspaceConfig);
 
   return locations;
 };
