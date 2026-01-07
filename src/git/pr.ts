@@ -1,5 +1,6 @@
 import { Octokit } from '@octokit/rest';
 import { getGitHubToken } from './auth';
+import { generateCommitMessage, generatePRTitle } from '../utils/pr-validation';
 import type { PullRequestResult } from '../types/github';
 import type { PackageFileUpdate } from '../package/update';
 
@@ -80,6 +81,7 @@ export const createPullRequest = async (
       branchName
     );
 
+    const commitMessage = generateCommitMessage(packageName, version);
     await updateFileContent(
       octokit,
       owner,
@@ -88,15 +90,16 @@ export const createPullRequest = async (
       fileUpdate.content,
       sha,
       branchName,
-      `chore: bump ${packageName} to ${version}`
+      commitMessage
     );
   }
 
   // Create pull request
+  const prTitle = generatePRTitle(packageName, version);
   const { data: pr } = await octokit.rest.pulls.create({
     owner,
     repo,
-    title: `chore: bump ${packageName} to ${version}`,
+    title: prTitle,
     head: branchName,
     base: baseBranch,
     body: `This PR updates \`${packageName}\` to version \`${version}\`.`
