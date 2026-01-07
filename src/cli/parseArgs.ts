@@ -1,5 +1,6 @@
 import { Command } from "commander";
-import type { CliOptions } from "../types/cli";
+import { cliOptionsSchema, type CliOptions } from "../schemas/cli";
+import { parseOrExit } from "../utils/validation";
 
 export const parseArgs = (): CliOptions => {
   const program = new Command();
@@ -10,5 +11,5 @@ export const parseArgs = (): CliOptions => {
     .option("--path <path>", "Specific path to package.json (for monorepo workspaces)")
     .parse(process.argv);
 
-  return program.opts() as CliOptions;
+  return parseOrExit(cliOptionsSchema, program.opts(), 'Invalid CLI arguments');
 };

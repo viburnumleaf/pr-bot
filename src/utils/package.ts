@@ -2,7 +2,7 @@ import { updateMultiplePackageJson } from '../package/update';
 import { findPackageJsonFiles, detectWorkspaceType } from './workspace';
 import { WorkspaceType } from '../types/workspace';
 import type { MultiPackageUpdateResult } from '../types/package';
-import type { CliOptions } from '../types/cli';
+import type { CliOptions } from '../schemas/cli';
 
 export const updateDependency = async (
   repoPath: string,

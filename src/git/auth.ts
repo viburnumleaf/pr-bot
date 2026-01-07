@@ -1,11 +1,10 @@
 import dotenv from 'dotenv';
+import { envSchema } from '../schemas/env';
+import { parseOrExit } from '../utils/validation';
+
 dotenv.config({ path: '.env.local' });
 
 export const getGitHubToken = (): string => {
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) {
-    console.error('❌ GITHUB_TOKEN not set in environment');
-    process.exit(1);
-  }
-  return token;
+  const env = parseOrExit(envSchema, process.env, 'Invalid environment variables');
+  return env.GITHUB_TOKEN;
 };
