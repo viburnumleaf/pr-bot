@@ -9,6 +9,7 @@ export const parseArgs = (): CliOptions => {
   program
     .name("pr-bot")
     .description("Automated dependency update PR creator for GitHub repositories")
+    // TODO: Read version dynamically from package.json instead of hardcoding
     .version("0.1.0", "-V, --version", "Display version number")
     .helpOption("-h, --help", "Display help for command")
     .requiredOption("-r, --repo <repo>", "GitHub repository (owner/name)")

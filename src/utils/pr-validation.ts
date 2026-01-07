@@ -14,6 +14,7 @@ const escapeRegex = (str: string): string => {
 };
 
 // Checks if PR already exists for the same package and version
+// TODO: Improve PR matching algorithm to handle version ranges and different PR title formats
 export const checkExistingPR = async (
   client: GitHubClient,
   owner: string,

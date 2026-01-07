@@ -58,6 +58,7 @@ export const createPullRequest = async (
     );
   }
 
+  // TODO: Enhance PR body with more details (changelog link, breaking changes, etc.)
   // Create pull request
   const prTitle = generatePRTitle(packageName, version);
   const pr = await client.createPullRequest(owner, repo, {

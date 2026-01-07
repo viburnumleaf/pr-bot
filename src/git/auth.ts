@@ -4,19 +4,41 @@ import { parseOrExit } from '../utils/validation';
 
 dotenv.config({ path: '.env.local' });
 
-// Gets and validates GitHub token from environment variables
-// Checks if the provided repository matches GITHUB_NAME from env
-// @param repoFullName - Repository in format "owner/name" that must match GITHUB_NAME
-export const getGitHubToken = (repoFullName: string): string => {
+type GitHubRepoConfig = {
+  GITHUB_NAME: string;
+  GITHUB_TOKEN: string;
+};
+
+// Array of repository configurations with name and token
+// Currently contains one object from environment variables
+// TODO: Add more repositories to the array as needed from Database or API
+const getGitHubRepos = (): GitHubRepoConfig[] => {
   const env = parseOrExit(envSchema, process.env, 'Invalid environment variables');
   
-  // Check if repository matches the configured GITHUB_NAME
-  if (repoFullName !== env.GITHUB_NAME) {
+  return [
+    {
+      GITHUB_NAME: env.GITHUB_NAME,
+      GITHUB_TOKEN: env.GITHUB_TOKEN,
+    },
+  ];
+};
+
+// Gets and validates GitHub token from environment variables
+// Checks if the provided repository matches GITHUB_NAME from the repos array
+export const getGitHubToken = (repoFullName: string): string => {
+  const repos = getGitHubRepos();
+  
+  // Find repository configuration that matches the requested repo
+  const repoConfig = repos.find(repo => repo.GITHUB_NAME === repoFullName);
+  
+  if (!repoConfig) {
+    const availableRepos = repos.map(r => r.GITHUB_NAME).join(', ');
     throw new Error(
-      `Repository "${repoFullName}" does not match configured repository "${env.GITHUB_NAME}". ` +
+      `Repository "${repoFullName}" not found in configuration. ` +
+      `Available repositories: ${availableRepos || 'none'}. ` +
       `Update GITHUB_NAME in .env.local to match the repository you want to use.`
     );
   }
   
-  return env.GITHUB_TOKEN;
+  return repoConfig.GITHUB_TOKEN;
 };

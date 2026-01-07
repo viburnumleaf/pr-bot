@@ -30,6 +30,7 @@ export const updatePackageJsonContent = (
     updatedIn = 'devDependencies';
     packageJson.devDependencies[packageName] = version;
   } else {
+    // TODO: Add support for peerDependencies and optionalDependencies
     return { updated: false, newContent: content, updatedIn: null };
   }
   

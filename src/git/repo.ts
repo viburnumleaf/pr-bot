@@ -32,6 +32,7 @@ export const getDefaultBranch = async (repoFullName: string): Promise<string> =>
 
 // Creates a new branch from a base branch
 // @throws {RepositoryError} if branch creation fails
+// TODO: Check if branch already exists and handle gracefully (skip or error)
 export const createBranch = async (
   repoFullName: string,
   branchName: string,

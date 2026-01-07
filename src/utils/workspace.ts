@@ -223,6 +223,7 @@ export const getWorkspaceConfig = async (
 };
 
 // Expands glob pattern by listing directories from GitHub
+// TODO: Optimize recursive search for large repositories (consider using GitHub search API)
 const expandWorkspacePattern = async (
   client: GitHubClient,
   owner: string,

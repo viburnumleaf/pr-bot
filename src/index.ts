@@ -36,6 +36,8 @@ const bootstrap = async (): Promise<void> => {
   );
 };
 
+// TODO: Implement dry-run mode to show what would be done without making changes
+// TODO: Add better error recovery and retry logic for transient GitHub API failures
 bootstrap().catch((error) => {
   logger.error("Unexpected error occurred", error instanceof AppError ? error.code : 'UNKNOWN_ERROR');
   process.exit(1);

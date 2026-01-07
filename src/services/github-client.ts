@@ -18,6 +18,7 @@ export type GitHubFileInfo = {
 export class GitHubClient {
   constructor(private readonly octokit: Octokit) {}
 
+  // TODO: Add rate limiting handling with exponential backoff retry logic
   // Gets file content from GitHub repository
   async getFileContent(
     owner: string,

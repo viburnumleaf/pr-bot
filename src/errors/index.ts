@@ -1,6 +1,4 @@
-/**
- * Custom error classes for better error handling and type safety
- */
+// Custom error classes for better error handling and type safety
 
 export class AppError extends Error {
   constructor(
