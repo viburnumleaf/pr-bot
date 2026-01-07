@@ -5,6 +5,7 @@ import type { CliOptions } from '../schemas/cli';
 // Prepares and validates CLI options and environment
 export const prepare = (): CliOptions => {
   const options = parseArgs();
-  getGitHubToken(); // validate token
+  // Validate token for the specified repository
+  getGitHubToken(options.repo);
   return options;
 };

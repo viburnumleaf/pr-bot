@@ -16,8 +16,8 @@ const parseRepository = (repoFullName: string): { owner: string; repo: string } 
 };
 
 // Creates a GitHub client instance
-const createGitHubClient = (): GitHubClient => {
-  const token = getGitHubToken();
+const createGitHubClient = (repoFullName: string): GitHubClient => {
+  const token = getGitHubToken(repoFullName);
   const octokit = new Octokit({ auth: token });
   return new GitHubClient(octokit);
 };
@@ -26,7 +26,7 @@ const createGitHubClient = (): GitHubClient => {
 // @throws {RepositoryError} if repository is invalid or inaccessible
 export const getDefaultBranch = async (repoFullName: string): Promise<string> => {
   const { owner, repo } = parseRepository(repoFullName);
-  const client = createGitHubClient();
+  const client = createGitHubClient(repoFullName);
   return await client.getDefaultBranch(owner, repo);
 };
 
@@ -38,6 +38,6 @@ export const createBranch = async (
   baseBranch: string
 ): Promise<void> => {
   const { owner, repo } = parseRepository(repoFullName);
-  const client = createGitHubClient();
+  const client = createGitHubClient(repoFullName);
   await client.createBranch(owner, repo, branchName, baseBranch);
 };
