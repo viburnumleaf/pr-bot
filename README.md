@@ -16,6 +16,17 @@ PR Bot is a CLI tool that automatically:
 pnpm install
 ```
 
+### Global link (for CLI usage)
+
+```bash
+# Build and link globally
+pnpm build
+pnpm link -g
+
+# Now the pr-bot command is available system-wide
+pr-bot --help
+```
+
 ## Configuration
 
 Create a `.env.local` file in the project root:
@@ -25,6 +36,19 @@ GITHUB_TOKEN=your_github_personal_access_token
 ```
 
 **GITHUB_TOKEN** - GitHub Personal Access Token with write permissions to the repository (can be account-wide or repository-specific)
+
+### Environment variables (when using global CLI)
+
+You can provide `GITHUB_TOKEN` in any of these ways:
+
+```bash
+# 1) One-off (inline)
+GITHUB_TOKEN=your_github_personal_access_token pr-bot --help
+
+# 2) Export for current shell session
+export GITHUB_TOKEN=your_github_personal_access_token
+pr-bot --help
+```
 
 ## Usage
 

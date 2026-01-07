@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 import { prepare } from "./utils/prepare";
 import { generateBranchName } from "./utils/branch";
 import { setupBranch } from "./utils/repo";

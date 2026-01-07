@@ -5,11 +5,12 @@
   "private": true,
   "type": "module",
   "bin": {
-    "pr-bot": "src/index.ts"
+    "pr-bot": "dist/index.js"
   },
   "scripts": {
     "start": "tsx src/index.ts",
-    "build": "tsc",
+    "build": "tsup --config tsup.config.ts",
+    "prepare": "pnpm build",
     "type-check": "tsc --noEmit",
     "test": "vitest",
     "test:ui": "vitest --ui",
@@ -31,6 +32,7 @@
     "@types/semver": "^7.7.1",
     "@vitest/coverage-v8": "^4.0.16",
     "@vitest/ui": "^4.0.16",
+    "tsup": "^8.1.0",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
