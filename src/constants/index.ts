@@ -1,6 +1,4 @@
-/**
- * Application constants
- */
+// Application constants
 
 export const GITHUB_API = {
   PER_PAGE_MAX: 100,

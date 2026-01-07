@@ -19,7 +19,10 @@ export const cliOptionsSchema = z.object({
   repo: z.string().min(1),
   package: z.string().min(1),
   version: semverValidator,
-  path: z.string().optional()
+  path: z.string().optional(),
+  baseBranch: z.string().optional(),
+  dryRun: z.boolean().optional(),
+  verbose: z.boolean().optional(),
 });
 
 export type CliOptions = z.infer<typeof cliOptionsSchema>;

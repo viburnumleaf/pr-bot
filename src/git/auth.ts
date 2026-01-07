@@ -5,7 +5,6 @@ import { parseOrExit } from '../utils/validation';
 dotenv.config({ path: '.env.local' });
 
 // Gets and validates GitHub token from environment variables
-// @throws {ValidationError} if token is missing or invalid
 export const getGitHubToken = (): string => {
   const env = parseOrExit(envSchema, process.env, 'Invalid environment variables');
   return env.GITHUB_TOKEN;
